@@ -1,7 +1,4 @@
-(write-line "Welcome to leaf's Void Linux install script")
-(write-line "Please enter the root password to continue with this installation: ")
-
-(defvar *system-password* "kiwI,.123")
+(defvar *system-password* "dsads")
 
 (defmacro with-sudo (control-string &rest fmt-arguments)
   `(format nil "echo ~a | sudo -S ~a"  *system-password*
@@ -24,32 +21,36 @@
    "ii"
    (uiop:run-program (format nil "xbps-query -l | grep ~a" package) :output :string)))
 
+(defun read-from-file (path)
+  (with-open-file (str path
+		       :direction :input
+		       :if-does-not-exist :create)
+    str))
+
+(defun write-to-file (path content &key if-exists)
+  (with-open-file (str path
+		       :direction :output
+		       :if-exists if-exists
+		       :if-does-not-exist :create)
+    (format str content)))
+
 ;;; Preliminary
 
 (uiop:chdir "~/")
-(xbps-install "" "-Syu") ;; Updating repository
+(xbps-install "" "-Syu" :output *standard-output*) ;; Updating repository
 
 ;;; Packages
 
-(loop for pkg in (uiop:read-file-lines "packages") do (xbps-install pkg "-Syu"))
+(loop for pkg in (uiop:read-file-lines "packages") do (xbps-install pkg "-Syu" :output output))
 
-;;; ENV
-
-;;; Quicklisp
-
-(uiop:run-program "curl -O https://beta.quicklisp.org/quicklisp.lisp")
-
-(quicklisp-quickstart:install)
-(ql:add-to-init-file)
+;;; Stump WM
 
 (ql:quickload :clx)
 (ql:quickload :cl-ppcre)
 (ql:quickload :alexandria)
 
-(uiop:run-program (format nil "git clone https://github.com/madand/clx-truetype ~a/local-projects"
-			  (uiop:getenv "HOME")))
-
-;;; Stump WM
+(uiop:run-program (format nil "git clone https://github.com/madand/clx-truetype")
+		  :ignore-error-status t)
 
 (uiop:run-program "git clone https://github.com/stumpwm/stumpwm")
 (uiop:chdir "stumpwm/")
@@ -58,10 +59,9 @@
 (uiop:run-program "make")
 (uiop:run-program (with-sudo "~a" "make install"))
 
-(with-open-file (str (format nil "~a/.xinitrc" (uiop:getenv "HOME"))
-                     :direction :output
-                     :if-exists :supersede
-                     :if-does-not-exist :create)
-  (format str "stumpwm"))
+;;; End
 
-;; Firefox
+(load "destinations.lisp")
+
+(loop for dest in *destinations* do
+      (uiop:copy-file (car dest) (cdr dest)))
