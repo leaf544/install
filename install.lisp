@@ -49,10 +49,15 @@
 (ql:quickload :cl-ppcre)
 (ql:quickload :alexandria)
 
-(uiop:run-program (format nil "git clone https://github.com/madand/clx-truetype")
+(uiop:run-program (format nil "git clone https://github.com/madand/clx-truetype ~/quicklisp/local-projects")
 		  :ignore-error-status t)
 
-(uiop:run-program "git clone https://github.com/stumpwm/stumpwm")
+(uiop:run-program "git clone https://github.com/stumpwm/stumpwm"
+		  :ignore-error-status t)
+
+(uiop:run-program "git clone https://github.com/stumpwm/stumpwm-contrib/"
+		  :ignore-error-status t)
+
 (uiop:chdir "stumpwm/")
 (uiop:run-program "./autogen.sh")
 (uiop:run-program "./configure")
@@ -63,5 +68,13 @@
 
 (load "destinations.lisp")
 
+(write-line "Copying files to their destination")
+
 (loop for dest in *destinations* do
-      (uiop:copy-file (car dest) (cdr dest)))
+  (if (not (file-exists-p (car dest)))
+      (uiop:run-program (format nil "cp -r ~a" (car dest)))
+      
+      (uiop:copy-file (car dest)
+		      (cdr dest))))
+
+(write-line "File copying done")
