@@ -1,0 +1,305 @@
+
+;; -*- mode: lisp -*-
+
+;; (in-package #:stumpwm)
+
+;; (setf *colors*
+;;       '("#ffffff"        ; ^0 ; White
+;; 	"#131220"        ; ^1 ; Dark Blue
+;; 	"#f72f33"        ; ^2 ; Red
+;; 	"#689d6a"        ; ^3 ; Light Green
+;; 	"#62bfef"        ; ^4 ; Light Blue
+;;         "#fabd2f"        ; ^5 ; Yellow / Help map keys
+;; 	"#a644bf"        ; ^6 ; Magenta
+;; 	"#cc4a0e"        ; ^7 ; Brown
+;; 	"#56b6c2"))   
+
+;; REPL
+
+;; (ql:quickload :slynk)
+;; (slynk:create-server :dont-close t)
+
+;; (load "/home/leaf/.emacs.d/elpa/slime-20230314.915/swank-loader.lisp")
+;; (swank-loader:init)
+;; (defcommand swank () ()
+;;   (swank:create-server :port 4005
+;;                        :style swank:*communication-style*
+;;                        :dont-close t)
+;;   (echo-string (current-screen) 
+;; 	       "Starting swank. M-x slime-connect RET RET, then (in-package stumpwm)."))
+;; (swank)
+
+;(sb-ext:run-program "redshift" '("-O" "4300") :search t :wait nil)
+(sb-ext:run-program "xset" '("r" "rate" "250" "30") :search t :wait nil)
+(sb-ext:run-program "picom" '("-b" "--vsync") :search t :wait nil) 
+
+;; (add-hook *start-hook*
+;; 	  #'(lambda ()
+;; 	      (ql:quickload :slynk)
+;; 	      (sb-ext:run-program "redshift" '("-O" "4300") :search t :wait nil)
+;; 	      (sb-ext:run-program "xset" '("r" "rate" "250" "30") :search t :wait nil)
+;; 	      (sb-ext:run-program "picom" '("-b" "--vsync" "--backend" "glx" "--no-fading-openclose" "-D" "3" "-i" "1.0" "--experimental-backends") :search t :wait nil) 
+;; 	      )
+;; 	  )
+
+(set-prefix-key (kbd "C-z"))
+
+;; Font Loading
+
+(ql:quickload "clx-truetype")
+(xft:cache-fonts)
+(add-to-load-path "/home/leaf/.stumpwm.d/modules/ttf-fonts")
+(load-module "ttf-fonts")
+(set-font (make-instance 'xft:font
+			 :family "Liberation Mono"
+			 :subfamily "Regular" :size 13))
+;; Volume Control
+
+(add-to-load-path "/home/leaf/.stumpwm.d/modules/stump-volume-control")
+(load-module "stump-volume-control")
+
+;; Mode line
+
+(setf *mode-line-background-color* "black"
+      *mode-line-foreground-color* "#B3C985"
+      *mode-line-position* :bottom
+      *mode-line-border-color* "gray25"
+      *mode-line-border-width* 2
+      *maxsize-border-width* 1
+      *normal-border-width* 1
+      *transient-border-width* 1
+      *float-window-modifier* :SUPER
+      )
+
+(enable-mode-line (current-screen) (current-head) t)
+
+;; (setf *window-format*
+;;       "%n-%c")
+(defcommand-alias p pull-marked)
+;; We need to condense this shit
+
+(defun my/battery ()
+  (let* ((bat (remove #\Newline (run-shell-command
+				 "cat -s /sys/class/power_supply/BAT0/capacity" t)))
+	 (parsed
+	   (or (parse-integer bat :junk-allowed t) "0"))
+	 )
+    (format nil
+	    "^(:fg \"~a\")~a^]"
+	    (cond
+	      ((>= parsed 70) "green")
+	      ((>= parsed 40) "light sea green")
+	      ((>= parsed 20) "yellow4"))
+	    parsed)
+    )
+  )
+
+(defun color (color string)
+  (format nil "^(:fg \"~a\")~a^]" color string))
+
+(setf *screen-mode-line-format*
+      (list
+       "[^(:fg \"OliveDrab3\")%n^]] %W ^>"
+       '(:eval (format nil "[~a] " (my/battery)))
+       '(:eval (remove #\Newline (run-shell-command
+				  "date '+%A %I:%M %p %D' -u"
+				  t)))
+       ))
+
+;; Groups
+
+(setf *float-window-modifier* :ALT)
+
+;; Windows
+
+(setf *window-border-style* :none)
+(setf *mouse-focus-policy* :click)
+
+;; Keys
+
+(set-focus-color *mode-line-border-color*)
+
+(defcommand tor () ()
+  (run-shell-command
+   "cd ~/tor && ./start-tor-browser.desktop"
+   )
+  )
+
+(defcommand increase () ()
+  (run-shell-command
+   "amixer set Master 5%+ "
+   )
+  (echo (run-shell-command
+	 "amixer get Master | awk '$0~/%/{print $4}' | tr -d '[]'"
+	 t))
+  )
+
+(defcommand decrease () ()
+  (run-shell-command
+   "amixer set Master 5%- "
+   )
+  (echo (run-shell-command
+	 "amixer get Master | awk '$0~/%/{print $4}' | tr -d '[]'"
+	 t))
+  )
+
+(defcommand sc () ()
+  (run-shell-command "scrot -s"))
+
+(defcommand scf () ()
+  (run-shell-command "scrot -d 1"))
+
+(define-key *top-map* (kbd "M-3") "increase")
+(define-key *top-map* (kbd "M-2") "decrease")
+(define-key *top-map* (kbd "M-1") "volume-toggle-mute")
+
+(define-key *top-map* (kbd "XF86AudioRaiseVolume") "increase")
+(define-key *top-map* (kbd "XF86AudioLowerVolume") "decrease")
+(define-key *top-map* (kbd "XF86AudioMute") "volume-toggle-mute")
+
+(defcommand f () ()
+  (run-or-raise "firefox" '(:class "Firefox")))
+
+;; Match any window with a window-class matching "Firefox"
+(define-remapped-keys
+  `((,(lambda (win)
+        (string-equal "Firefox" (window-class win)))
+     ("C-e"   . "C-j"))))
+
+(setf *default-group-name* "Main")
+
+(defcommand o () ()
+  (only))
+
+(defcommand ec () ()
+  (kill-windows-other))
+
+(defcommand my/next () ()
+  (if (only-one-frame-p)
+      (next-in-frame)
+      (move-focus :right))
+  )
+
+(defcommand my/prev () ()
+  (if (only-one-frame-p)
+      (prev-in-frame)
+    (move-focus :left))
+  )
+
+(define-key *top-map* (kbd "M-Tab") "pull-hidden-next")
+(define-key *top-map* (kbd "M-ISO_Left_Tab") "pull-hidden-previous")
+(define-key *root-map* (kbd "Right") "my/next")
+(define-key *root-map* (kbd "a") "date")
+(define-key *root-map* (kbd "Left") "my/prev")
+
+(set-border-color *mode-line-border-color*)
+
+(run-shell-command "xwallpaper --zoom ~/pngs/lights.jpg")
+
+(defcommand my/hs () ()
+  (hsplit)
+  (fother))
+
+(defcommand my/vs () ()
+  (vsplit)
+  (fother))
+
+(defcommand l () ()
+  (gnew "Temp")
+  (fother))
+
+(define-key *root-map* (kbd "[") "my/hs")
+(define-key *root-map* (kbd "]") "my/vs")
+(define-key *root-map* (kbd "l") "l")
+(define-key *root-map* (kbd "TAB") "expose")
+
+(setf *ignore-wm-inc-hints* t)
+
+;; (defmacro generate-bin-programs ()
+;;   `(loop for x in (directory "/bin/*") do
+;;     (defcommand ,(pathname-name x) () ()
+;;       (run-shell-command ,(pathname-name x)))
+;; 	 )
+;;   )
+
+;; (loop for x in (directory "/bin/*") do
+;;   (let ((path (pathname-name x)))
+;;     (when (every #'alpha-char-p path)
+;;       (eval `(defcommand ,(intern path) () ()
+;; 	       (run-shell-command ,path)))
+;;       )))
+
+(set-bg-color *mode-line-background-color*)
+(set-fg-color *mode-line-foreground-color*)
+
+(setf *input-window-gravity* :top-right)
+(setf *message-window-input-gravity* :center)
+(setf *message-window-padding* 10)
+(setf *message-window-gravity* :center)
+
+(setf *startup-message* nil)
+
+;; (defun groups-string ()
+;;   (concat
+;;    (format nil "^R~8:@<~A~>^r"
+;;            (group-name (current-group)))
+;;    (format
+;;     nil "~{~A~}"
+;;     (loop :for n :from 1
+;;           :for g :in (stumpwm::sort-groups (current-screen))
+;;           :collect (let ((str (format nil " ~D " n))
+;;                          (groups (screen-groups (current-screen))))
+;;                      (cond ((eq g (current-group))
+;;                             (stumpwm::fmt-highlight
+;;                              (concat "^(:fg \"#ce5cff\")" str "^n")))
+;;                            ((eq g (second groups))
+;;                             (concat "^(:fg \"#ce5cff\")" str "^n"))
+;;                            (t str)))))))
+
+(set-float-focus-color "olivedrab3")
+(set-float-unfocus-color *mode-line-border-color*)
+
+(setf stumpwm::*float-window-title-height* 1)
+
+(defcommand my/term () ()
+  (run-or-raise "emacs -q --load=/home/leaf/term.el" '(:class "Leafterm")))
+
+;; (define-frame-preference nil
+;;   (0 t t :class "Emacs")
+;;   )
+
+(defmacro normalize-titles (&rest triplets)
+  `(progn ,@(loop for (property string title) on triplets by #'cdddr
+                  collect `(if (string= (,(case property
+						(:class 'window-class)
+						(:instance 'window-res))
+                                         window)
+					,string)
+                               (setf (window-user-title window) ,title)))))
+
+(defun normalize-window-titles (window)
+  (normalize-titles
+   :class "Inkscape" "Inkscape"
+   :class "Firefox" "Firefox"
+   :class "Emacs" "Leafmacs"
+   :class "Leafterm" "Term"
+   :class "MultiMC" "MultiMC"
+   :class "obs" "OBS"
+   ))
+
+(defcommand mc () ()
+  (run-or-raise "/home/leaf/Downloads/MultiMC/MultiMC" '(:class "MultiMC")))
+
+(add-hook *new-window-hook* 'normalize-window-titles)
+
+(define-minor-mode yasar-mode () ()
+  (:interactive t)
+  (:scope :unscoped)
+  (:top-map '(("e" . "emacs")
+	      ("f" . "f")
+	      ))
+  (:lighter "Yasar")
+  (:lighter-make-clickable t)
+  )
+
+(define-key *root-map* (kbd "a") "yasar-mode")
